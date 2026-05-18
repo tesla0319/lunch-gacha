@@ -1,23 +1,28 @@
 /**
  * app.js - ランチガチャ アプリ本体
- * Step5: 昇格演出（R っぽい演出 → フラッシュ → SSR へ昇格）
+ * Step6: 効果音（mp3未配置でも止まらない・iOS Safari対応）
  *
  * 【このファイルの構成】
  *  1. CONFIG              … 全設定値を一元管理
  *  2. DOM 要素の参照       … 操作する要素をまとめて取得
- *  3. 状態変数             … アプリの状態を管理するフラグ
- *  4. wait()              … 非同期待機ヘルパー（async/await 用）★ Step5追加
- *  5. validateConfig()    … CONFIG の妥当性チェック
- *  6. pickRarity()        … 重み付き抽選でレアリティを決定
- *  7. pickItemByRarity()  … レアリティ内からアイテムをランダム選択
- *  8. shouldPromote()     … 昇格演出を発生させるか判定
- *  9. renderResult()      … 抽選結果を画面（DOM）に反映
- * 10. playNormalAnimation() … 通常演出フロー（async）★ Step5で async/await 化
- * 11. playPromotionAnimation() … 昇格演出フロー（async）★ Step5追加
- * 12. playAnimation()     … 演出ディスパッチャー（通常/昇格を振り分ける）
- * 13. showError()         … エラーメッセージを画面に表示
- * 14. playGacha()         … ガチャ全体のフロー制御（メイン関数）
- * 15. イベントリスナー     … ボタン押下の検知
+ *  3. 状態変数             … フラグ・音声キャッシュ
+ *  4. wait()              … 非同期待機ヘルパー
+ *  5. ---- 音声機能 ----
+ *     unlockAudio()       … iOS Safari の再生制限を解除する ★ Step6追加
+ *     playSound()         … 効果音を再生する              ★ Step6追加
+ *  6. validateConfig()    … CONFIG の妥当性チェック
+ *  7. pickRarity()        … 重み付き抽選
+ *  8. pickItemByRarity()  … レアリティ内アイテム選択
+ *  9. shouldPromote()     … 昇格演出判定
+ * 10. renderResult()      … DOM に結果を反映
+ * 11. playNormalAnimation()   … 通常演出（async）
+ * 12. playPromotionAnimation() … 昇格演出（async）
+ * 13. playAnimation()     … 演出ディスパッチャー
+ * 14. resetDisplay()      … 表示リセット
+ * 15. finishAnimation()   … 演出終了共通処理
+ * 16. showError()         … エラー表示
+ * 17. playGacha()         … ガチャ全体フロー
+ * 18. イベントリスナー
  */
 
 'use strict';
@@ -35,9 +40,8 @@ const CONFIG = {
     N:   50,
   },
 
-  promotionRate: 30, // SSR 当選時のうち昇格演出が発生する確率（%）
+  promotionRate: 30,
 
-  // 演出時間（ミリ秒）
   normalAnimMs:    2500,
   promotionAnimMs: 4500,
 
@@ -68,33 +72,127 @@ const overlayText       = document.getElementById('overlay-text');
    3. 状態変数
    ============================================================ */
 
+// ガチャ演出中フラグ（多重実行防止）
 let isGachaRunning = false;
 
-/* ============================================================
-   4. wait(ms) - 非同期待機ヘルパー ★ Step5追加
-   ============================================================
-
-   なぜ wait() を作るか：
-   setTimeout を入れ子（ネスト）で書くと「コールバック地獄」と呼ばれる
-   読みにくい構造になる。wait() を使うと以下のように書ける：
-
-     await wait(1000); // 1秒待つ
-     await wait(500);  // 0.5秒待つ
-
-   これで演出フローを「上から順に読める」コードにできる。
-
-   仕組み：
-   Promise は「非同期処理の結果を表すオブジェクト」。
-   setTimeout が完了したときに resolve() を呼ぶ Promise を返している。
-   async 関数の中で await すると、Promise が解決するまで処理が止まる。
+/*
+  音声キャッシュ：{ 'click': AudioObject, 'gacha_start': AudioObject, ... }
+  unlockAudio() が成功した音声だけ格納される。
+  mp3 が未配置のキーは undefined のまま（playSound がハンドリングする）。
 */
+const audioCache = {};
+
+/*
+  isAudioUnlocked：unlockAudio() を一度だけ実行するためのフラグ。
+  最初のボタンタップ時に true になる。
+*/
+let isAudioUnlocked = false;
+
+/* ============================================================
+   4. wait(ms) - 非同期待機ヘルパー
+   ============================================================ */
 
 function wait(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
 
 /* ============================================================
-   5. validateConfig()
+   5-A. unlockAudio() - iOS Safari の再生制限を解除する ★ Step6追加
+   ============================================================
+
+   【iOS Safari の制約】
+   ブラウザは「ユーザー操作（タップ/クリック）に直接反応したコード」の中でしか
+   Audio の初回再生を許可しない。
+   async/await の await より後のコードは setTimeout と同じ扱いになるため、
+   「ユーザー操作に直接反応」とはみなされない。
+
+   【解決策：事前アンロック】
+   ① ボタンタップで呼ばれる playGacha() の先頭（同期処理）で unlockAudio() を実行。
+   ② unlockAudio() で全音声ファイルの Audio 要素を作成し、音量0で一瞬再生する。
+   ③ iOS Safari はこの操作で「このAudio要素の再生を許可」と記憶する。
+   ④ 以降は await の後でも、アンロック済みの Audio 要素は再生できる。
+
+   ※ mp3 が未配置の場合は play() が失敗するが、catch で無視する（動作に影響なし）。
+*/
+
+function unlockAudio() {
+  // 2回目以降は何もしない
+  if (isAudioUnlocked) return;
+  isAudioUnlocked = true;
+
+  const soundNames = ['click', 'gacha_start', 'ssr', 'result'];
+
+  soundNames.forEach(name => {
+    try {
+      const audio = new Audio(`sounds/${name}.mp3`);
+      audio.volume = 0; // 音量ゼロ（ユーザーには聞こえない）
+
+      // play() を呼んで iOS に「この要素の再生を許可」と登録させる
+      const promise = audio.play();
+
+      if (promise !== undefined) {
+        promise
+          .then(() => {
+            // 再生成功 → 止めてキャッシュに保存（以降はキャッシュを使い回す）
+            audio.pause();
+            audio.currentTime = 0;
+            audio.volume = 1;
+            audioCache[name] = audio;
+          })
+          .catch(() => {
+            // ファイル未配置など → キャッシュに入れない（playSound が個別に対処）
+          });
+      }
+    } catch (err) {
+      // Audio コンストラクタ自体が失敗した場合も無視
+    }
+  });
+}
+
+/* ============================================================
+   5-B. playSound(name) - 効果音を再生する ★ Step6追加
+   ============================================================
+
+   【設計方針】
+   - mp3 が存在しなくても console.warn だけで処理を続ける
+   - play() の Promise reject も必ずキャッチする（iOSで必須）
+   - try-catch で Audio コンストラクタのエラーも吸収する
+
+   【キャッシュ戦略】
+   - unlockAudio() で成功した音声はキャッシュ済みなので高速に再生できる
+   - キャッシュにない場合（mp3未配置など）は新規 Audio を作って再生試行する
+     → 失敗しても console.warn で記録するだけ
+
+   引数 name：'click' | 'gacha_start' | 'ssr' | 'result'
+*/
+
+function playSound(name) {
+  try {
+    const cached = audioCache[name];
+
+    if (cached) {
+      // キャッシュ済みの Audio 要素を先頭に戻して再生
+      cached.currentTime = 0;
+      cached.play().catch(err => {
+        console.warn(`[Sound] "${name}" の再生をスキップしました:`, err.message);
+      });
+    } else {
+      // キャッシュにない → ファイル未配置か、アンロック処理がまだ完了していない
+      // 新しい Audio で再生試行（失敗しても続行）
+      const audio = new Audio(`sounds/${name}.mp3`);
+      audio.play().catch(() => {
+        // warn を出しすぎるのも邪魔なので、未配置ファイルは静かにスキップ
+        console.warn(`[Sound] "sounds/${name}.mp3" をスキップ（ファイル未配置の可能性）`);
+      });
+    }
+  } catch (err) {
+    // Audio コンストラクタのエラーなど、予期しない例外
+    console.warn(`[Sound] "${name}" で予期しないエラーが発生しました:`, err.message);
+  }
+}
+
+/* ============================================================
+   6. validateConfig()
    ============================================================ */
 
 function validateConfig() {
@@ -129,7 +227,7 @@ function validateConfig() {
 }
 
 /* ============================================================
-   6. pickRarity()
+   7. pickRarity()
    ============================================================ */
 
 function pickRarity() {
@@ -148,7 +246,7 @@ function pickRarity() {
 }
 
 /* ============================================================
-   7. pickItemByRarity(rarity)
+   8. pickItemByRarity(rarity)
    ============================================================ */
 
 function pickItemByRarity(rarity) {
@@ -164,7 +262,7 @@ function pickItemByRarity(rarity) {
 }
 
 /* ============================================================
-   8. shouldPromote(rarity)
+   9. shouldPromote(rarity)
    ============================================================ */
 
 function shouldPromote(rarity) {
@@ -173,7 +271,7 @@ function shouldPromote(rarity) {
 }
 
 /* ============================================================
-   9. renderResult(item, isPromotion)
+   10. renderResult(item, isPromotion)
    ============================================================ */
 
 function renderResult(item, isPromotion) {
@@ -198,61 +296,20 @@ function renderResult(item, isPromotion) {
 }
 
 /* ============================================================
-   10. playNormalAnimation(item) - 通常演出  ★ async/await 化
+   11. playNormalAnimation(item) - 通常演出
    ============================================================
 
-   SSR（昇格なし）・SR・R・N すべての通常ガチャ演出。
-   フェーズを await wait() で区切ることで、上から順に読める構造にする。
+   【効果音タイミング】
+   - playSound('gacha_start') … Phase1 の先頭（await より前＝ユーザー操作コンテキスト内）
+   - playSound('result')      … finishAnimation() 内で呼ぶ（await 後・キャッシュ使用）
 */
 
 async function playNormalAnimation(item) {
   const rarityClass = `rarity-${item.rarity.toLowerCase()}`;
-  const phase2Ms    = Math.floor(CONFIG.normalAnimMs * 0.42); // ≈ 1050ms
-  const phase3Ms    = CONFIG.normalAnimMs - phase2Ms;         // ≈ 1450ms
+  const phase2Ms    = Math.floor(CONFIG.normalAnimMs * 0.42);
+  const phase3Ms    = CONFIG.normalAnimMs - phase2Ms;
 
   // ---- Phase1：暗転 + 「抽選中…」----
-  resetDisplay();                             // 前回の結果をクリア
-  screenOverlay.classList.add('active');      // 画面を暗転
-  overlayText.textContent = '抽選中…';
-  overlayText.className   = 'overlay-text is-pulsing';  // パルスアニメ開始
-  resultOverlay.className = 'result-overlay';            // オーバーレイを表示
-  resultArea.className    = 'result-area is-animating';  // カード枠を点滅
-
-  await wait(phase2Ms); // ≈ 1050ms 待機
-
-  // ---- Phase2：「結果発表！」+ レアリティ色に変化 ----
-  overlayText.textContent = '結果発表！';
-  overlayText.className   = `overlay-text ${rarityClass}`;    // テキストをレアリティ色に
-  resultOverlay.className = `result-overlay ${rarityClass}`;  // 背景をレアリティ色にほんのり
-  resultArea.className    = 'result-area';                    // カード点滅を止める
-
-  await wait(phase3Ms); // ≈ 1450ms 待機
-
-  // ---- Phase3：結果表示 ----
-  finishAnimation(item, false);
-}
-
-/* ============================================================
-   11. playPromotionAnimation(item) - 昇格演出  ★ Step5追加
-   ============================================================
-
-   昇格演出フロー（合計 promotionAnimMs = 4500ms）：
-   ─────────────────────────────────────────────────────────
-   Phase1 (0ms → 1000ms)    ：「抽選中…」（通常と同じ出だし）
-   Phase2 (1000ms → 2100ms) ：「R... ?」青色演出（R っぽく見せる）
-   Phase3 (2100ms → 2600ms) ：R 色のカードをチラ見せ（オーバーレイ非表示）
-   Phase4 (2600ms → 3100ms) ：フラッシュ（金色に輝く）
-   Phase5 (3100ms → 4500ms) ：「✨ 昇格！！」虹色テキスト
-   Phase6 (4500ms)          ：本当の SSR 結果を表示
-   ─────────────────────────────────────────────────────────
-
-   【重要】抽選結果（SSR・アイテム）はすでに確定している。
-   この関数は「見せ方」だけを制御し、結果を書き換えることはない。
-*/
-
-async function playPromotionAnimation(item) {
-
-  // ---- Phase1：「抽選中…」（通常と同じ） ----
   resetDisplay();
   screenOverlay.classList.add('active');
   overlayText.textContent = '抽選中…';
@@ -260,60 +317,90 @@ async function playPromotionAnimation(item) {
   resultOverlay.className = 'result-overlay';
   resultArea.className    = 'result-area is-animating';
 
+  // ガチャ開始音（await より前なので iOS でも確実に鳴る）
+  playSound('gacha_start');
+
+  await wait(phase2Ms); // ≈ 1050ms
+
+  // ---- Phase2：「結果発表！」+ レアリティ色 ----
+  overlayText.textContent = '結果発表！';
+  overlayText.className   = `overlay-text ${rarityClass}`;
+  resultOverlay.className = `result-overlay ${rarityClass}`;
+  resultArea.className    = 'result-area';
+
+  await wait(phase3Ms); // ≈ 1450ms
+
+  // ---- Phase3：結果表示（finishAnimation が result 音を鳴らす）----
+  finishAnimation(item, false);
+}
+
+/* ============================================================
+   12. playPromotionAnimation(item) - 昇格演出
+   ============================================================
+
+   【効果音タイミング】
+   - playSound('gacha_start') … Phase1（await 前）
+   - playSound('ssr')         … Phase5 昇格テキスト表示時（キャッシュ使用）
+   - playSound('result')      … finishAnimation() 内（キャッシュ使用）
+*/
+
+async function playPromotionAnimation(item) {
+
+  // ---- Phase1：「抽選中…」----
+  resetDisplay();
+  screenOverlay.classList.add('active');
+  overlayText.textContent = '抽選中…';
+  overlayText.className   = 'overlay-text is-pulsing';
+  resultOverlay.className = 'result-overlay';
+  resultArea.className    = 'result-area is-animating';
+
+  // ガチャ開始音（await より前）
+  playSound('gacha_start');
+
   await wait(1000);
 
-  // ---- Phase2：「R... ?」R っぽい演出でユーザーを油断させる ----
-  // 本当は SSR だが、まず R（青）に見えるようにする
+  // ---- Phase2：「R... ?」R っぽい演出 ----
   overlayText.textContent = 'R ... ?';
-  overlayText.className   = 'overlay-text rarity-r';      // 青テキスト
-  resultOverlay.className = 'result-overlay rarity-r';    // 背景をうっすら青に
-  resultArea.className    = 'result-area';                // カード点滅を止める
+  overlayText.className   = 'overlay-text rarity-r';
+  resultOverlay.className = 'result-overlay rarity-r';
+  resultArea.className    = 'result-area';
 
   await wait(1100);
 
   // ---- Phase3：R 色のカードをチラ見せ ----
-  // オーバーレイを一旦消して「あ、R か…」と思わせる瞬間
   resultOverlay.className = 'result-overlay hidden';
-  resultArea.className    = 'result-area rarity-r';       // R の青グローだけ見せる
-  // （アイテム名・レアリティバッジはまだ非表示のまま）
+  resultArea.className    = 'result-area rarity-r';
 
   await wait(500);
 
   // ---- Phase4：フラッシュ ----
-  // 突然金色に輝いて「何かが変わる」ことを知らせる
-  resultOverlay.className = 'result-overlay flash';       // card-flash アニメ発動
-  // フラッシュアニメ（0.45s）より少し長く待つ
+  resultOverlay.className = 'result-overlay flash';
+
   await wait(500);
 
   // ---- Phase5：「✨ 昇格！！」虹色テキスト ----
-  // フラッシュ後に SSR 金演出へ切り替える
   overlayText.textContent = '✨ 昇格！！';
-  overlayText.className   = 'overlay-text is-rainbow';    // 虹色アニメーション
-  resultOverlay.className = 'result-overlay rarity-ssr';  // 背景を SSR 色（暖色）に
-  resultArea.className    = 'result-area rarity-ssr';     // カードを金グローに
+  overlayText.className   = 'overlay-text is-rainbow';
+  resultOverlay.className = 'result-overlay rarity-ssr';
+  resultArea.className    = 'result-area rarity-ssr';
+
+  // SSR 演出音（unlockAudio でキャッシュ済みなので await 後でも再生可能）
+  playSound('ssr');
 
   await wait(1400);
 
-  // ---- Phase6：SSR 結果を表示 ----
+  // ---- Phase6：SSR 結果を表示（finishAnimation が result 音を鳴らす）----
   finishAnimation(item, true);
 }
 
 /* ============================================================
-   12. playAnimation(item, isPromotion) - 演出ディスパッチャー
-   ============================================================
-
-   isPromotion の値によって通常演出と昇格演出を振り分ける。
-   どちらも async 関数なので Promise を返す。
-   エラーが起きてもボタンが永久に無効にならないよう .catch() で保護する。
-*/
+   13. playAnimation(item, isPromotion) - 演出ディスパッチャー
+   ============================================================ */
 
 function playAnimation(item, isPromotion) {
-  // isPromotion が true なら昇格演出、false なら通常演出
   const animFn = isPromotion ? playPromotionAnimation : playNormalAnimation;
 
-  // async 関数を呼び出し、エラーが起きたときの保護を追加する
   animFn(item).catch(err => {
-    // 万が一演出中にエラーが出ても、ボタンが永久に無効にならないようにする
     console.error('[演出エラー]', err);
     isGachaRunning = false;
     gachaBtn.disabled = false;
@@ -321,13 +408,9 @@ function playAnimation(item, isPromotion) {
 }
 
 /* ============================================================
-   ヘルパー関数
+   14. resetDisplay() - 演出開始前に前回の表示をリセット
    ============================================================ */
 
-/*
-  resetDisplay()：演出開始前に前回の結果表示をリセットする。
-  毎回クリーンな状態から演出を始めるために必要。
-*/
 function resetDisplay() {
   resultRarity.className    = 'result-rarity hidden';
   resultName.className      = 'result-name hidden';
@@ -335,15 +418,10 @@ function resetDisplay() {
   resultPlaceholder.classList.add('hidden');
 }
 
-/*
-  finishAnimation(item, isPromotion)：演出の最終フェーズ（共通処理）。
-  通常演出・昇格演出どちらも最後はこれを呼ぶ。
-  - オーバーレイを消す
-  - 画面を明転
-  - renderResult でアイテムを表示
-  - フェードインアニメーション付与
-  - ガチャ完了（ボタン再有効化）
-*/
+/* ============================================================
+   15. finishAnimation(item, isPromotion) - 演出終了共通処理
+   ============================================================ */
+
 function finishAnimation(item, isPromotion) {
   resultOverlay.className = 'result-overlay hidden';
   overlayText.className   = 'overlay-text';
@@ -351,7 +429,9 @@ function finishAnimation(item, isPromotion) {
 
   renderResult(item, isPromotion);
 
-  // フェードインアニメーションを付与（renderResult が className をリセットした後なので確実に動く）
+  // 結果表示音（unlockAudio 済みなので await 後でも再生可能）
+  playSound('result');
+
   resultRarity.classList.add('anim-fade-in');
   resultName.classList.add('anim-fade-in');
   if (isPromotion) {
@@ -365,7 +445,7 @@ function finishAnimation(item, isPromotion) {
 }
 
 /* ============================================================
-   13. showError(message)
+   16. showError(message)
    ============================================================ */
 
 function showError(message) {
@@ -379,19 +459,32 @@ function showError(message) {
 }
 
 /* ============================================================
-   14. playGacha() - ガチャ全体のフロー制御（メイン関数）
-   ============================================================ */
+   17. playGacha() - ガチャ全体のフロー制御
+   ============================================================
+
+   【Step6 での変更点】
+   - unlockAudio() を先頭で呼ぶ（iOS Safari の再生制限解除・初回のみ実行）
+   - playSound('click') をボタン押下直後に呼ぶ
+     → ここはユーザー操作の同期コンテキストなので iOS でも確実に鳴る
+*/
 
 function playGacha() {
 
   if (isGachaRunning) return;
 
+  // ① iOS Safari のオーディオロックを解除（初回のみ。2回目以降は即return）
+  unlockAudio();
+
+  // ② ボタン押下音（ユーザー操作の直後 = 同期処理内なので確実に鳴る）
+  playSound('click');
+
+  // ③ CONFIG 検証
   if (!validateConfig()) {
     showError('設定エラー：管理者にお問い合わせください');
     return;
   }
 
-  // ① 抽選結果をすべて確定（演出開始前に決める）
+  // ④ 抽選結果をすべて確定（演出開始前に決める）
   const rarity      = pickRarity();
   const item        = pickItemByRarity(rarity);
   const isPromotion = shouldPromote(rarity);
@@ -407,16 +500,16 @@ function playGacha() {
     promotion: isPromotion ? '昇格演出あり🎊' : 'なし',
   });
 
-  // ② 実行中フラグ ON・ボタン無効化
+  // ⑤ 実行中フラグ ON・ボタン無効化
   isGachaRunning = true;
   gachaBtn.disabled = true;
 
-  // ③ 演出開始
+  // ⑥ 演出開始
   playAnimation(item, isPromotion);
 }
 
 /* ============================================================
-   15. イベントリスナー
+   18. イベントリスナー
    ============================================================ */
 
 gachaBtn.addEventListener('click', playGacha);
