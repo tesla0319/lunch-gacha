@@ -265,7 +265,26 @@ body {
   color: #fff;
   letter-spacing: 0.12em;
   text-shadow: 0 0 20px rgba(255, 255, 255, 0.5);
+  /* transition で色変化をなめらかに（Phase1→Phase2 でレアリティ色に変わる） */
+  transition: color 0.3s ease, text-shadow 0.3s ease;
 }
+
+/*
+  Phase1 で使う：「抽選中…」テキストをパルスさせる。
+  JS が classList.add('is-pulsing') で付与し、Phase2 で外す。
+*/
+.overlay-text.is-pulsing {
+  animation: text-pulse 0.85s ease-in-out infinite;
+}
+
+/*
+  Phase2 で使う：オーバーレイ背景をレアリティ色にほんのり染める。
+  JS が result-overlay.className に rarity-* クラスを追加する。
+*/
+.result-overlay.rarity-ssr { background: rgba(40, 22, 0, 0.93); }
+.result-overlay.rarity-sr  { background: rgba(28, 0, 42, 0.93); }
+.result-overlay.rarity-r   { background: rgba(0, 14, 45, 0.93); }
+.result-overlay.rarity-n   { background: rgba(8, 8, 18, 0.93);  }
 
 
 /* ===== フッター（ガチャボタン） ===== */
@@ -361,16 +380,84 @@ body {
 }
 
 
-/* ===== 演出用クラスの土台（Step4以降で内容を実装） ===== */
+/* ===== キーフレームアニメーション定義 ===== */
 
 /*
-  以下のクラスは Step4 でアニメーション・色変化を追加する。
-  現時点では「クラス名の予約」として記述しておく。
+  CSS アニメーションの動き方を定義する。
+  @keyframes は「何%のタイミングでどんなスタイルにするか」を記述する。
+  実際にアニメーションを動かすには、要素の animation プロパティで指定する。
 */
 
-/* ガチャ演出中の状態（ボタン無効化などの見た目制御に使う） */
+/* カード枠の点滅（抽選中に使う） */
+@keyframes blink-border {
+  0%, 100% { border-color: #2a2a4a; }
+  50%       { border-color: #6464cc; }
+}
+
+/* テキストのパルス（「抽選中…」が呼吸するように見せる） */
+@keyframes text-pulse {
+  0%, 100% { opacity: 1;    transform: scale(1);    }
+  50%       { opacity: 0.3; transform: scale(0.95); }
+}
+
+/*
+  結果フェードイン（バッジ・アイテム名の登場演出）。
+  下から少し浮かび上がりながらフェードインする。
+*/
+@keyframes fade-in-up {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: translateY(0);    }
+}
+
+/* SSR 金色グロー（カード枠が脈打つように光る） */
+@keyframes glow-ssr {
+  0%, 100% {
+    box-shadow:
+      0 0 20px rgba(255, 215, 0, 0.35),
+      0 8px 32px rgba(0, 0, 0, 0.6);
+  }
+  50% {
+    box-shadow:
+      0 0 65px rgba(255, 215, 0, 1.0),
+      0 0 100px rgba(255, 165, 0, 0.5),
+      0 8px 32px rgba(0, 0, 0, 0.6);
+  }
+}
+
+/* SR 紫グロー */
+@keyframes glow-sr {
+  0%, 100% {
+    box-shadow:
+      0 0 16px rgba(192, 132, 252, 0.3),
+      0 8px 32px rgba(0, 0, 0, 0.6);
+  }
+  50% {
+    box-shadow:
+      0 0 44px rgba(192, 132, 252, 0.85),
+      0 8px 32px rgba(0, 0, 0, 0.6);
+  }
+}
+
+/* R 青グロー */
+@keyframes glow-r {
+  0%, 100% {
+    box-shadow:
+      0 0 12px rgba(96, 165, 250, 0.3),
+      0 8px 32px rgba(0, 0, 0, 0.6);
+  }
+  50% {
+    box-shadow:
+      0 0 34px rgba(96, 165, 250, 0.75),
+      0 8px 32px rgba(0, 0, 0, 0.6);
+  }
+}
+
+
+/* ===== 演出用クラス ===== */
+
+/* 抽選中：カード枠を点滅させる */
 .is-animating {
-  /* Step4で実装 */
+  animation: blink-border 0.7s ease-in-out infinite;
 }
 
 /* ===== レアリティ別カラーリング ===== */
@@ -390,37 +477,28 @@ body {
 .rarity-n   { color: #9ca3af; } /* 灰   */
 
 /*
-  カード（.result-area）の枠線もレアリティ色に変える。
-  .result-area に .rarity-* を重ねることで枠線・影を上書きする。
+  カード（.result-area）の枠線とグロー演出をレアリティ色に変える。
+  animation で box-shadow を脈動させることで「光る」感じを出す。
 */
 .result-area.rarity-ssr {
   border-color: #ffd700;
-  /* 金色の光彩（Step4でより強い演出を追加） */
-  box-shadow:
-    0 0 20px rgba(255, 215, 0, 0.25),
-    0 8px 32px rgba(0, 0, 0, 0.6),
-    inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  /* glow-ssr キーフレームで gold グローが脈打つ */
+  animation: glow-ssr 1.8s ease-in-out infinite;
 }
 
 .result-area.rarity-sr {
   border-color: #c084fc;
-  box-shadow:
-    0 0 20px rgba(192, 132, 252, 0.2),
-    0 8px 32px rgba(0, 0, 0, 0.6),
-    inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  animation: glow-sr 2s ease-in-out infinite;
 }
 
 .result-area.rarity-r {
   border-color: #60a5fa;
-  box-shadow:
-    0 0 16px rgba(96, 165, 250, 0.2),
-    0 8px 32px rgba(0, 0, 0, 0.6),
-    inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  animation: glow-r 2.4s ease-in-out infinite;
 }
 
 .result-area.rarity-n {
   border-color: #4b5563;
-  /* N はグロー無し */
+  /* N はグロー無し（静的な shadow のみ） */
   box-shadow:
     0 8px 32px rgba(0, 0, 0, 0.6),
     inset 0 1px 0 rgba(255, 255, 255, 0.05);
@@ -433,6 +511,28 @@ body {
 
 
 /* ===== ユーティリティクラス ===== */
+
+/*
+  .anim-fade-in：結果表示時のフェードイン演出。
+  renderResult() のあとで classList.add('anim-fade-in') を呼ぶと発動する。
+
+  animation-fill-mode: both の効果：
+  - アニメーション開始前に from（opacity:0）の状態を保持する。
+    これにより、要素が表示された瞬間に opacity:0 から始まり自然にフェードインする。
+*/
+.anim-fade-in {
+  animation: fade-in-up 0.45s ease-out both;
+}
+
+/* バッジより少し遅らせてアイテム名を登場させる（時間差で自然に見える） */
+.result-name.anim-fade-in {
+  animation-delay: 0.12s;
+}
+
+/* 昇格テキストはさらに少し遅らせる */
+.result-promotion.anim-fade-in {
+  animation-delay: 0.25s;
+}
 
 /*
   .hidden：要素を完全に非表示にする汎用クラス。
