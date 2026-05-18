@@ -440,6 +440,7 @@ function finishAnimation(item, isPromotion) {
   screenOverlay.classList.remove('active');
 
   renderResult(item, isPromotion);
+  resultArea.classList.add('anim-card-reveal');
 
   // 結果表示音（unlockAudio 済みなので await 後でも再生可能）
   playSound('result');
