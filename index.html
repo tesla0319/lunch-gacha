@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+
+  <!--
+    viewport-fit=cover：iPhone の notch（切り欠き）やホームバー領域まで
+    画面を広げる。safe-area-inset を使うための前提設定。
+  -->
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+
+  <!-- iOS Safari でホーム画面に追加したときフルスクリーン表示にする -->
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+
+  <!-- ブラウザのテーマカラー（Androidのアドレスバーなどに反映） -->
+  <meta name="theme-color" content="#1a1a2e">
+
+  <title>ランチガチャ</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <!--
+    #app：アプリ全体のラッパー。
+    header / main / footer の3段構成でレイアウトする。
+  -->
+  <div id="app">
+
+    <!-- ヘッダー：タイトルエリア -->
+    <header class="app-header">
+      <h1 class="app-title">ランチガチャ</h1>
+      <p class="app-subtitle">今日のランチを決めよう</p>
+    </header>
+
+    <!-- メイン：結果表示エリア -->
+    <main class="app-main">
+
+      <!--
+        .result-area：抽選結果を表示するカードエリア。
+        抽選前はプレースホルダーを表示し、抽選後に結果を表示する。
+      -->
+      <div id="result-area" class="result-area">
+
+        <!--
+          .result-overlay：演出中に「抽選中…」などのテキストを重ねる層。
+          Step4（ガチャ演出）で表示・非表示を切り替える。
+          初期は hidden クラスで非表示。
+        -->
+        <div id="result-overlay" class="result-overlay hidden">
+          <p id="overlay-text" class="overlay-text">抽選中…</p>
+        </div>
+
+        <!-- 抽選結果を入れるコンテンツ領域 -->
+        <div id="result-content" class="result-content">
+
+          <!--
+            レアリティバッジ（例：「SSR」「SR」「R」「N」）。
+            Step3でJSが動的にテキストとクラスを設定する。
+            初期は display: none で非表示。
+          -->
+          <div id="result-rarity" class="result-rarity"></div>
+
+          <!--
+            当選アイテム名（例：「焼肉」「ラーメン」）。
+            Step3でJSが動的にテキストを設定する。
+            初期は display: none で非表示。
+          -->
+          <div id="result-name" class="result-name"></div>
+
+          <!-- 抽選前のガイドテキスト。結果が出たら非表示にする。 -->
+          <p id="result-placeholder" class="result-placeholder">
+            ボタンを押して<br>ガチャを引こう！
+          </p>
+
+        </div>
+      </div>
+
+    </main>
+
+    <!-- フッター：ガチャボタンエリア -->
+    <footer class="app-footer">
+      <!--
+        #gacha-btn：メインのガチャボタン。
+        演出中は disabled 属性を付けて連打を防止する（Step3以降で実装）。
+      -->
+      <button id="gacha-btn" class="gacha-btn" type="button">
+        🎰 ガチャを引く
+      </button>
+    </footer>
+
+  </div>
+
+  <!--
+    #screen-overlay：画面全体を覆う暗転用オーバーレイ。
+    ガチャ演出中（Step4）にJSから active クラスを付けて暗転させる。
+    通常時は pointer-events: none で操作を透過させる。
+  -->
+  <div id="screen-overlay" class="screen-overlay"></div>
+
+  <!--
+    app.js は Step2 以降で追加する。
+    このコメントはStep2着手時に <script src="app.js"></script> に置き換える。
+  -->
+
+</body>
+</html>

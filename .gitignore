@@ -1,0 +1,12 @@
+# OS が自動生成するファイル
+.DS_Store
+Thumbs.db
+
+# エディタ・IDE の設定ファイル
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# ローカル環境固有の設定
+*.local

@@ -1,0 +1,392 @@
+/* ============================================================
+   style.css - ランチガチャ アプリ スタイル
+   Step1: HTML骨組み + CSS基本レイアウト
+   ============================================================ */
+
+
+/* ===== リセット・基本設定 ===== */
+
+/*
+  box-sizing: border-box
+  → padding や border を width/height の内側に含める。
+    これが無いとレイアウトがズレやすい。
+*/
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+/*
+  html に overflow-x: hidden を設定することで
+  横スクロールバーが出ないようにする。
+  スマホで画面がはみ出す原因のひとつを防ぐ。
+*/
+html {
+  overflow-x: hidden;
+  /* iOSでスクロールを滑らかにする */
+  -webkit-overflow-scrolling: touch;
+}
+
+body {
+  overflow-x: hidden;
+
+  /* 日本語フォントを優先的に指定 */
+  font-family:
+    'Hiragino Sans',
+    'Hiragino Kaku Gothic ProN',
+    'Noto Sans JP',
+    'YuGothic',
+    sans-serif;
+
+  /* ダークテーマのベース背景色（濃い紺色） */
+  background-color: #1a1a2e;
+  color: #e8e8f0;
+
+  /* フォントのアンチエイリアス（文字を滑らかに表示） */
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+
+  /* タップしたときに青いハイライトが出ないようにする（iOS対応） */
+  -webkit-tap-highlight-color: transparent;
+}
+
+
+/* ===== アプリ全体のラッパー #app ===== */
+
+#app {
+  /*
+    高さの指定：
+    100dvh = dynamic viewport height（動的ビューポート高さ）
+    → iOS Safari のアドレスバーの表示・非表示に連動して高さが変わる。
+    → アドレスバーが出ていてもUIが切れないようにする。
+    古いブラウザは 100dvh 非対応なので 100vh を fallback として先に書く。
+  */
+  min-height: 100vh;
+  min-height: 100dvh;
+
+  /* header / main / footer を縦に並べる */
+  display: flex;
+  flex-direction: column;
+
+  /*
+    スマホ縦画面の最大幅を制限し、中央寄せにする。
+    PCで開いたときも横に広がらない。
+  */
+  max-width: 480px;
+  width: 100%;
+  margin: 0 auto;
+
+  /*
+    safe-area-inset：iPhone の notch（カメラ切り欠き）や
+    ホームバー（画面下部のバー）に UI が隠れないようにする。
+    viewport-fit=cover を設定した上で env() 関数で余白を取る。
+  */
+  padding-top: env(safe-area-inset-top);
+  padding-bottom: env(safe-area-inset-bottom);
+  padding-left: env(safe-area-inset-left);
+  padding-right: env(safe-area-inset-right);
+}
+
+
+/* ===== ヘッダー（タイトルエリア） ===== */
+
+.app-header {
+  /* 上下左右の余白 */
+  padding: 28px 20px 16px;
+  text-align: center;
+
+  /*
+    flex-shrink: 0
+    → ヘッダーはコンテンツに応じてつぶれないように固定する。
+  */
+  flex-shrink: 0;
+}
+
+.app-title {
+  font-size: 2.2rem;
+  font-weight: bold;
+  letter-spacing: 0.12em;
+
+  /*
+    グラデーション文字：金色でソシャゲっぽさを演出。
+    -webkit-background-clip と -webkit-text-fill-color は
+    iOS Safari で動かすために必要なベンダープレフィックス。
+  */
+  background: linear-gradient(135deg, #ffe066, #ffaa00, #ff8c00);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.app-subtitle {
+  margin-top: 6px;
+  font-size: 0.85rem;
+  color: #666;
+  letter-spacing: 0.06em;
+}
+
+
+/* ===== メインエリア（結果表示） ===== */
+
+.app-main {
+  /*
+    flex: 1
+    → ヘッダーとフッターの残りのスペースをすべて使う。
+      これで結果エリアが画面中央に配置される。
+  */
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px 20px;
+}
+
+
+/* ===== 結果表示カード .result-area ===== */
+
+.result-area {
+  width: 100%;
+  max-width: 320px;
+
+  /*
+    aspect-ratio: 1 / 1
+    → 正方形を保つ。width が変わっても高さが自動で追従する。
+    古いブラウザ対応としてmin-height も設定しておく。
+  */
+  aspect-ratio: 1 / 1;
+  min-height: 280px;
+
+  /* ダークカードのデザイン */
+  background: #16213e;
+  border: 2px solid #2a2a4a;
+  border-radius: 20px;
+
+  /* 子要素を中央に配置 */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  /*
+    position: relative
+    → .result-overlay を絶対位置で重ねるために必要。
+  */
+  position: relative;
+
+  /* はみ出した子要素を隠す（border-radius に合わせて丸める） */
+  overflow: hidden;
+
+  /* 浮いた感じのシャドウ */
+  box-shadow:
+    0 8px 32px rgba(0, 0, 0, 0.6),
+    inset 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+
+/* 結果コンテンツ（レアリティ＋アイテム名） */
+.result-content {
+  text-align: center;
+  padding: 24px;
+  width: 100%;
+}
+
+/* 抽選前のガイドテキスト */
+.result-placeholder {
+  font-size: 1rem;
+  color: #4a4a6a;
+  line-height: 1.8;
+  letter-spacing: 0.05em;
+}
+
+/*
+  レアリティバッジ（「SSR」「SR」「R」「N」）。
+  Step3 でJSが動的に表示する。初期は非表示。
+*/
+.result-rarity {
+  display: none;
+  font-size: 1.1rem;
+  font-weight: bold;
+  letter-spacing: 0.25em;
+  margin-bottom: 16px;
+
+  /* レアリティバッジ風の枠 */
+  display: inline-block;
+  padding: 4px 16px;
+  border: 2px solid currentColor;
+  border-radius: 4px;
+
+  /* 初期は非表示 */
+  visibility: hidden;
+}
+
+/*
+  当選アイテム名（「焼肉」「ラーメン」など）。
+  Step3 でJSが動的に表示する。初期は非表示。
+*/
+.result-name {
+  display: none;
+  font-size: 2.6rem;
+  font-weight: bold;
+  letter-spacing: 0.05em;
+  line-height: 1.2;
+}
+
+
+/* ===== 演出オーバーレイ（結果カード内） ===== */
+
+/*
+  .result-overlay：カード内に「抽選中…」などを重ねる層。
+  Step4（ガチャ演出）で表示・非表示を切り替える。
+*/
+.result-overlay {
+  position: absolute;
+  inset: 0; /* top/right/bottom/left を全て 0 に */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.88);
+  z-index: 10;
+}
+
+.overlay-text {
+  font-size: 1.6rem;
+  font-weight: bold;
+  color: #fff;
+  letter-spacing: 0.12em;
+  text-shadow: 0 0 20px rgba(255, 255, 255, 0.5);
+}
+
+
+/* ===== フッター（ガチャボタン） ===== */
+
+.app-footer {
+  flex-shrink: 0;
+  text-align: center;
+
+  /*
+    ボタン下部の余白に safe-area-inset-bottom を加算する。
+    iPhone のホームバーにボタンが隠れないようにする。
+    calc() で通常の余白 + safe-area 分を合計している。
+  */
+  padding: 16px 20px calc(28px + env(safe-area-inset-bottom));
+}
+
+/* ガチャボタン */
+.gacha-btn {
+  display: block;
+  width: 100%;
+  max-width: 320px;
+  margin: 0 auto;
+
+  /* タップしやすい十分な高さ（最低44px推奨、余裕を持って設定） */
+  padding: 20px 0;
+
+  /* ゴールド系グラデーション */
+  background: linear-gradient(135deg, #ffe066, #ffaa00, #ff7c00);
+  color: #1a1a2e;
+
+  border: none;
+  border-radius: 50px; /* 丸みのある「カプセル型」ボタン */
+
+  font-size: 1.4rem;
+  font-weight: bold;
+  letter-spacing: 0.1em;
+
+  /* クリック可能であることを示すカーソル */
+  cursor: pointer;
+
+  /* タップ時の青いハイライトを除去（iOS対応） */
+  -webkit-tap-highlight-color: transparent;
+
+  /* 発光感のある影 */
+  box-shadow:
+    0 4px 20px rgba(255, 160, 0, 0.45),
+    0 2px 8px rgba(0, 0, 0, 0.3);
+
+  /* タップ時の変形をスムーズに */
+  transition: transform 0.1s ease, box-shadow 0.1s ease, opacity 0.1s ease;
+}
+
+/* タップ（押下）時のフィードバック */
+.gacha-btn:active:not(:disabled) {
+  transform: scale(0.96);
+  box-shadow:
+    0 2px 10px rgba(255, 160, 0, 0.3),
+    0 1px 4px rgba(0, 0, 0, 0.2);
+}
+
+/*
+  演出中（disabled 状態）のスタイル。
+  Step3以降で JS から disabled 属性を付ける。
+*/
+.gacha-btn:disabled {
+  background: linear-gradient(135deg, #3a3a5a, #2a2a4a);
+  color: #555;
+  box-shadow: none;
+  cursor: not-allowed;
+}
+
+
+/* ===== 画面全体オーバーレイ（暗転演出用） ===== */
+
+/*
+  #screen-overlay：画面全体を覆う暗転用の層。
+  Step4 のガチャ演出で JS から active クラスを付けて暗転させる。
+  通常時は透明で、操作も透過させる（pointer-events: none）。
+*/
+.screen-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0);
+  z-index: 100;
+  pointer-events: none; /* 通常時は操作を透過 */
+  transition: background 0.4s ease;
+}
+
+/* 暗転状態：Step4でJSが active クラスを付ける */
+.screen-overlay.active {
+  background: rgba(0, 0, 0, 0.85);
+  pointer-events: auto; /* 暗転中は背面の操作をブロック */
+}
+
+
+/* ===== 演出用クラスの土台（Step4以降で内容を実装） ===== */
+
+/*
+  以下のクラスは Step4 でアニメーション・色変化を追加する。
+  現時点では「クラス名の予約」として記述しておく。
+*/
+
+/* ガチャ演出中の状態（ボタン無効化などの見た目制御に使う） */
+.is-animating {
+  /* Step4で実装 */
+}
+
+/* レアリティ別のカラーリング */
+/* Step4 で色・グロー・アニメーションを追加する */
+.rarity-ssr {
+  /* SSR：虹色・金色 */
+}
+
+.rarity-sr {
+  /* SR：紫 */
+}
+
+.rarity-r {
+  /* R：青 */
+}
+
+.rarity-n {
+  /* N：灰色 */
+}
+
+
+/* ===== ユーティリティクラス ===== */
+
+/*
+  .hidden：要素を完全に非表示にする汎用クラス。
+  !important を付けてどんな状況でも確実に隠れるようにする。
+  JS から classList.add('hidden') / classList.remove('hidden') で制御する。
+*/
+.hidden {
+  display: none !important;
+}
