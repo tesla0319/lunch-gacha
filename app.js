@@ -124,7 +124,7 @@ function unlockAudio() {
 
   soundNames.forEach(name => {
     try {
-      const audio = new Audio(`sounds/${name}.mp3`);
+      const audio = new Audio(`sounds/${name}.wav`);
       audio.volume = 0; // 音量ゼロ（ユーザーには聞こえない）
 
       // play() を呼んで iOS に「この要素の再生を許可」と登録させる
@@ -154,13 +154,13 @@ function unlockAudio() {
    ============================================================
 
    【設計方針】
-   - mp3 が存在しなくても console.warn だけで処理を続ける
+   - wav が存在しなくても console.warn だけで処理を続ける
    - play() の Promise reject も必ずキャッチする（iOSで必須）
    - try-catch で Audio コンストラクタのエラーも吸収する
 
    【キャッシュ戦略】
    - unlockAudio() で成功した音声はキャッシュ済みなので高速に再生できる
-   - キャッシュにない場合（mp3未配置など）は新規 Audio を作って再生試行する
+   - キャッシュにない場合（wav未配置など）は新規 Audio を作って再生試行する
      → 失敗しても console.warn で記録するだけ
 
    引数 name：'click' | 'gacha_start' | 'ssr' | 'result'
@@ -179,10 +179,10 @@ function playSound(name) {
     } else {
       // キャッシュにない → ファイル未配置か、アンロック処理がまだ完了していない
       // 新しい Audio で再生試行（失敗しても続行）
-      const audio = new Audio(`sounds/${name}.mp3`);
+      const audio = new Audio(`sounds/${name}.wav`);
       audio.play().catch(() => {
         // warn を出しすぎるのも邪魔なので、未配置ファイルは静かにスキップ
-        console.warn(`[Sound] "sounds/${name}.mp3" をスキップ（ファイル未配置の可能性）`);
+        console.warn(`[Sound] "sounds/${name}.wav" をスキップ（ファイル未配置の可能性）`);
       });
     }
   } catch (err) {
