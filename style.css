@@ -76,70 +76,253 @@ body {
   margin: 0 auto;
 
   /*
-    safe-area-inset：iPhone の notch（カメラ切り欠き）に
-    UI が隠れないようにする。viewport-fit=cover と組み合わせて使う。
-
-    padding-bottom はここには書かない。
-    フッター（.app-footer）が safe-area-inset-bottom を含む余白を持っているため、
-    ここにも書くと二重カウントになり、ボタン下が過大な余白になってしまう。
+    safe-area-inset-left / right：ランドスケープ（横向き）で
+    ノッチが左側にある場合にコンテンツが隠れないようにする。
+    padding-top は .status-bar 側で管理する。
   */
-  padding-top: env(safe-area-inset-top);
   padding-left: env(safe-area-inset-left);
   padding-right: env(safe-area-inset-right);
 }
 
 
-/* ===== ヘッダー（タイトルエリア） ===== */
+/* ===== ① ステータスバー ===== */
 
-.app-header {
-  /* 上下左右の余白 */
-  padding: 28px 20px 16px;
-  text-align: center;
-
-  /*
-    flex-shrink: 0
-    → ヘッダーはコンテンツに応じてつぶれないように固定する。
-  */
+.status-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 14px;
+  /* padding-top にセーフエリアを加算（iPhone ノッチ対応） */
+  padding-top: calc(8px + env(safe-area-inset-top));
+  background: rgba(8, 6, 22, 0.95);
+  border-bottom: 1px solid rgba(255, 215, 0, 0.12);
   flex-shrink: 0;
 }
 
-.app-title {
-  font-size: 2.2rem;
+.status-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0; /* テキストの overflow を許可 */
+}
+
+.player-avatar {
+  width: 30px;
+  height: 30px;
+  background: linear-gradient(135deg, #ffe066, #ff8c00);
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.9rem;
+  flex-shrink: 0;
+}
+
+.player-name {
+  font-size: 0.82rem;
+  font-weight: bold;
+  color: #ccc;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.player-rank {
+  font-size: 0.68rem;
+  color: #ffd700;
+  background: rgba(255, 215, 0, 0.15);
+  border-radius: 10px;
+  padding: 1px 7px;
+  flex-shrink: 0;
+}
+
+.status-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.currency-item {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  background: rgba(255, 215, 0, 0.1);
+  border: 1px solid rgba(255, 215, 0, 0.28);
+  border-radius: 20px;
+  padding: 4px 10px;
+}
+
+.currency-icon { font-size: 0.85rem; }
+
+.currency-value {
+  font-size: 0.88rem;
+  font-weight: bold;
+  color: #ffe066;
+  /* 数字が変わっても幅が動かないようにする */
+  font-variant-numeric: tabular-nums;
+}
+
+
+/* ===== ② メインレイアウト（サイドナビ ＋ コンテンツ） ===== */
+
+/* サイドナビとコンテンツを横並びにするラッパー */
+.main-layout {
+  flex: 1;
+  display: flex;
+  overflow: hidden;
+}
+
+
+/* ===== ③ 左サイドナビ ===== */
+
+.side-nav {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 54px;
+  flex-shrink: 0;
+  background: rgba(8, 6, 22, 0.8);
+  border-right: 1px solid rgba(42, 42, 74, 0.8);
+  padding: 12px 0;
+  gap: 4px;
+}
+
+.nav-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  width: 44px;
+  padding: 8px 4px;
+  background: none;
+  border: none;
+  border-radius: 10px;
+  cursor: pointer;
+  color: #4a4a6a;
+  transition: background 0.15s ease, color 0.15s ease;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+
+/* タップ時・アクティブ時は金色に */
+.nav-btn:active,
+.nav-btn.is-active {
+  background: rgba(255, 215, 0, 0.12);
+  color: #ffd700;
+}
+
+.nav-icon { font-size: 1.2rem; line-height: 1; }
+
+.nav-label {
+  font-size: 0.52rem;
+  letter-spacing: 0.02em;
+  line-height: 1;
+}
+
+
+/* ===== ④ ガチャコンテンツエリア ===== */
+
+.gacha-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  /* safe-area-inset-bottom でホームバーの上にボタンが隠れないようにする */
+  padding-bottom: calc(20px + env(safe-area-inset-bottom));
+  overflow-y: auto;
+  /* iOS Safari でスクロールを慣性付きにする */
+  -webkit-overflow-scrolling: touch;
+}
+
+
+/* ===== ⑤ ガチャバナー ===== */
+
+.gacha-banner {
+  width: 100%;
+  background: linear-gradient(160deg, #0a0520 0%, #1c0a3a 55%, #0d1535 100%);
+  border: 1px solid rgba(255, 215, 0, 0.2);
+  border-radius: 14px;
+  padding: 14px 16px;
+  text-align: center;
+  position: relative;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+/* バナー中央の放射状グロー（装飾のみ・操作は透過） */
+.gacha-banner::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse 80% 60% at 50% 0%, rgba(255, 215, 0, 0.07) 0%, transparent 70%);
+  pointer-events: none;
+}
+
+.banner-tag {
+  display: inline-block;
+  font-size: 0.62rem;
+  font-weight: bold;
+  letter-spacing: 0.22em;
+  color: rgba(255, 215, 0, 0.85);
+  border: 1px solid rgba(255, 215, 0, 0.35);
+  border-radius: 3px;
+  padding: 2px 8px;
+  margin-bottom: 7px;
+}
+
+.banner-title {
+  font-size: 1.45rem;
   font-weight: bold;
   letter-spacing: 0.12em;
-
-  /*
-    グラデーション文字：金色でソシャゲっぽさを演出。
-    -webkit-background-clip と -webkit-text-fill-color は
-    iOS Safari で動かすために必要なベンダープレフィックス。
-  */
+  margin-bottom: 4px;
   background: linear-gradient(135deg, #ffe066, #ffaa00, #ff8c00);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
 }
 
-.app-subtitle {
-  margin-top: 6px;
-  font-size: 0.85rem;
-  color: #666;
-  letter-spacing: 0.06em;
+.banner-sub {
+  font-size: 0.76rem;
+  color: #7878a0;
+  letter-spacing: 0.05em;
+  margin-bottom: 10px;
 }
 
-
-/* ===== メインエリア（結果表示） ===== */
-
-.app-main {
-  /*
-    flex: 1
-    → ヘッダーとフッターの残りのスペースをすべて使う。
-      これで結果エリアが画面中央に配置される。
-  */
-  flex: 1;
+/* 確率バッジ群 */
+.banner-rates {
   display: flex;
-  align-items: center;
   justify-content: center;
-  padding: 16px 20px;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.rate-badge {
+  font-size: 0.62rem;
+  font-weight: bold;
+  letter-spacing: 0.06em;
+  padding: 2px 8px;
+  border-radius: 10px;
+  border: 1px solid;
+}
+
+.rate-badge.rate-ssr {
+  color: #ffd700;
+  border-color: rgba(255, 215, 0, 0.45);
+  background: rgba(255, 215, 0, 0.08);
+}
+.rate-badge.rate-sr {
+  color: #c084fc;
+  border-color: rgba(192, 132, 252, 0.45);
+  background: rgba(192, 132, 252, 0.08);
+}
+.rate-badge.rate-r {
+  color: #60a5fa;
+  border-color: rgba(96, 165, 250, 0.45);
+  background: rgba(96, 165, 250, 0.08);
 }
 
 
@@ -321,77 +504,96 @@ body {
 }
 
 
-/* ===== フッター（ガチャボタン） ===== */
+/* ===== ⑦ ガチャボタンエリア ===== */
 
-.app-footer {
+/* 1回ボタン・10回ボタンを縦に並べるラッパー */
+.gacha-btn-area {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 100%;
   flex-shrink: 0;
-  text-align: center;
-
-  /*
-    ボタン下部の余白に safe-area-inset-bottom を加算する。
-    iPhone のホームバーにボタンが隠れないようにする。
-    calc() で通常の余白 + safe-area 分を合計している。
-  */
-  padding: 16px 20px calc(28px + env(safe-area-inset-bottom));
 }
 
-/* ガチャボタン */
+/* ガチャボタン共通ベース */
 .gacha-btn {
-  display: block;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
   width: 100%;
-  max-width: 320px;
-  margin: 0 auto;
 
-  /* タップしやすい十分な高さ（最低44px推奨、余裕を持って設定） */
-  padding: 20px 0;
-
-  /* ゴールド系グラデーション */
-  background: linear-gradient(135deg, #ffe066, #ffaa00, #ff7c00);
-  color: #1a1a2e;
+  /* タップしやすい十分な高さ（最低 44px 推奨） */
+  padding: 14px 0;
 
   border: none;
-  border-radius: 50px; /* 丸みのある「カプセル型」ボタン */
-
-  font-size: 1.4rem;
-  font-weight: bold;
-  letter-spacing: 0.1em;
-
-  /* クリック可能であることを示すカーソル */
+  border-radius: 50px; /* カプセル型 */
   cursor: pointer;
 
-  /* タップ時の青いハイライトを除去（iOS対応） */
+  /* タップ時の青いハイライトを除去（iOS 対応） */
   -webkit-tap-highlight-color: transparent;
 
   /*
     touch-action: manipulation
-    → ダブルタップによるズームを無効化し、タップ認識の遅延（約300ms）を除去する。
-      スマホでボタンの反応を即座にする効果がある。
+    → ダブルタップズームを無効化しタップ遅延（約 300ms）を除去する。
   */
   touch-action: manipulation;
 
-  /* 発光感のある影 */
+  transition: transform 0.1s ease, box-shadow 0.1s ease;
+}
+
+/* タップ時のフィードバック */
+.gacha-btn:active:not(:disabled) {
+  transform: scale(0.97);
+}
+
+/* 1回ガチャ：ゴールド系（メインアクション） */
+.gacha-btn--single {
+  background: linear-gradient(135deg, #ffe066, #ffaa00, #ff7c00);
+  color: #1a1a2e;
   box-shadow:
     0 4px 20px rgba(255, 160, 0, 0.45),
     0 2px 8px rgba(0, 0, 0, 0.3);
-
-  /* タップ時の変形をスムーズに */
-  transition: transform 0.1s ease, box-shadow 0.1s ease, opacity 0.1s ease;
 }
 
-/* タップ（押下）時のフィードバック */
-.gacha-btn:active:not(:disabled) {
-  transform: scale(0.96);
+/* 10回ガチャ：パープル系（サブアクション） */
+.gacha-btn--multi {
+  background: linear-gradient(135deg, #a78bfa, #7c3aed, #4c1d95);
+  color: #f0e8ff;
   box-shadow:
-    0 2px 10px rgba(255, 160, 0, 0.3),
-    0 1px 4px rgba(0, 0, 0, 0.2);
+    0 4px 18px rgba(124, 58, 237, 0.35),
+    0 2px 8px rgba(0, 0, 0, 0.3);
 }
 
-/* 演出中（disabled 状態）のスタイル。 */
+/* 演出中・準備中（disabled 状態）。:disabled は疑似クラスなので単体で高い優先度を持つ。 */
 .gacha-btn:disabled {
-  background: linear-gradient(135deg, #3a3a5a, #2a2a4a);
-  color: #555;
+  background: linear-gradient(135deg, #2e2e4a, #1e1e38);
+  color: #44445a;
   box-shadow: none;
   cursor: not-allowed;
+}
+
+/* ボタン内：メインテキスト（「1回ガチャ」など） */
+.btn-main {
+  font-size: 1.05rem;
+  font-weight: bold;
+  letter-spacing: 0.08em;
+}
+
+/* ボタン内：コスト表示（「💎 100」など） */
+.btn-cost {
+  font-size: 0.78rem;
+  opacity: 0.82;
+  letter-spacing: 0.04em;
+}
+
+/* 「準備中」などの補足テキスト */
+.btn-cost em {
+  font-style: normal;
+  font-size: 0.68rem;
+  opacity: 0.65;
+  margin-left: 4px;
 }
 
 

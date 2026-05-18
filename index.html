@@ -14,38 +14,74 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 
   <!-- ブラウザのテーマカラー（Androidのアドレスバーなどに反映） -->
-  <meta name="theme-color" content="#1a1a2e">
+  <meta name="theme-color" content="#0a0820">
 
   <title>ランチガチャ</title>
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
 
-  <!--
-    #app：アプリ全体のラッパー。
-    header / main / footer の3段構成でレイアウトする。
-  -->
-  <div id="app">
+<div id="app">
 
-    <!-- ヘッダー：タイトルエリア -->
-    <header class="app-header">
-      <h1 class="app-title">ランチガチャ</h1>
-      <p class="app-subtitle">今日のランチを決めよう</p>
-    </header>
+  <!-- ① ステータスバー：プレイヤー情報とゲーム内通貨を表示 -->
+  <header class="status-bar">
+    <div class="status-left">
+      <div class="player-avatar">🎮</div>
+      <span class="player-name">たべたろう</span>
+      <span class="player-rank">Lv.12</span>
+    </div>
+    <div class="status-right">
+      <div class="currency-item">
+        <span class="currency-icon">💎</span>
+        <span class="currency-value" id="gem-count">300</span>
+      </div>
+    </div>
+  </header>
 
-    <!-- メイン：結果表示エリア -->
-    <main class="app-main">
+  <!-- ② メインレイアウト：左サイドナビ ＋ ガチャコンテンツ の横並び -->
+  <div class="main-layout">
 
-      <!--
-        .result-area：抽選結果を表示するカードエリア。
-        抽選前はプレースホルダーを表示し、抽選後に結果を表示する。
-      -->
+    <!-- ③ 左サイドナビ：アイコン＋ラベルの縦メニュー -->
+    <nav class="side-nav">
+      <button class="nav-btn is-active" aria-label="ガチャ">
+        <span class="nav-icon">🎰</span>
+        <span class="nav-label">ガチャ</span>
+      </button>
+      <button class="nav-btn" aria-label="ホーム">
+        <span class="nav-icon">🏠</span>
+        <span class="nav-label">ホーム</span>
+      </button>
+      <button class="nav-btn" aria-label="ショップ">
+        <span class="nav-icon">🛒</span>
+        <span class="nav-label">ショップ</span>
+      </button>
+      <button class="nav-btn" aria-label="ランキング">
+        <span class="nav-icon">🏆</span>
+        <span class="nav-label">ランク</span>
+      </button>
+    </nav>
+
+    <!-- ④ ガチャコンテンツ：バナー・結果カード・ボタンを縦に並べる -->
+    <main class="gacha-content">
+
+      <!-- ⑤ ガチャバナー：ピックアップ告知エリア -->
+      <section class="gacha-banner">
+        <span class="banner-tag">✦ PICKUP ✦</span>
+        <h2 class="banner-title">ランチガチャ</h2>
+        <p class="banner-sub">今日のランチを決めよう！</p>
+        <div class="banner-rates">
+          <span class="rate-badge rate-ssr">SSR 3%</span>
+          <span class="rate-badge rate-sr">SR 12%</span>
+          <span class="rate-badge rate-r">R 35%</span>
+        </div>
+      </section>
+
+      <!-- ⑥ 結果表示カード（既存のまま流用・ID は変更なし） -->
       <div id="result-area" class="result-area">
 
         <!--
-          .result-overlay：演出中に「抽選中…」などのテキストを重ねる層。
-          Step4（ガチャ演出）で表示・非表示を切り替える。
-          初期は hidden クラスで非表示。
+          .result-overlay：演出中に「抽選中…」などを重ねる層。
+          app.js が className で表示・非表示を切り替える。
         -->
         <div id="result-overlay" class="result-overlay hidden">
           <p id="overlay-text" class="overlay-text">抽選中…</p>
@@ -53,57 +89,49 @@
 
         <!-- 抽選結果を入れるコンテンツ領域 -->
         <div id="result-content" class="result-content">
-
-          <!--
-            レアリティバッジ（例：「SSR」「SR」「R」「N」）。
-            初期は hidden で非表示。Step3 の renderResult() が classList を書き換えて表示する。
-          -->
-          <div id="result-rarity" class="result-rarity hidden"></div>
-
-          <!--
-            当選アイテム名（例：「焼肉」「ラーメン」）。
-            初期は hidden で非表示。Step3 の renderResult() が表示する。
-          -->
-          <div id="result-name" class="result-name hidden"></div>
-
-          <!--
-            昇格演出テキスト。
-            SSR 当選 + 昇格演出あり の場合だけ表示する（Step5 で本格演出に差し替え）。
-          -->
+          <div id="result-rarity"    class="result-rarity hidden"></div>
+          <div id="result-name"      class="result-name hidden"></div>
           <div id="result-promotion" class="result-promotion hidden"></div>
-
-          <!-- 抽選前のガイドテキスト。renderResult() 呼び出し時に非表示にする。 -->
-          <p id="result-placeholder" class="result-placeholder">
+          <p   id="result-placeholder" class="result-placeholder">
             ボタンを押して<br>ガチャを引こう！
           </p>
-
         </div>
+
+      </div>
+
+      <!-- ⑦ ガチャボタンエリア：1回 / 10回（準備中） -->
+      <div class="gacha-btn-area">
+
+        <!--
+          id="gacha-btn"：app.js の playGacha() がそのまま呼ばれる。
+          演出中は app.js が disabled 属性を付けて連打を防止する。
+        -->
+        <button id="gacha-btn" class="gacha-btn gacha-btn--single" type="button">
+          <span class="btn-main">🎰 1回ガチャ</span>
+          <span class="btn-cost">💎 100</span>
+        </button>
+
+        <!-- 10回ガチャ：現フェーズはダミー。disabled で見せるだけ。 -->
+        <button id="gacha-btn-10" class="gacha-btn gacha-btn--multi" type="button" disabled>
+          <span class="btn-main">🎰 10回ガチャ</span>
+          <span class="btn-cost">💎 1000　<em>準備中</em></span>
+        </button>
+
       </div>
 
     </main>
-
-    <!-- フッター：ガチャボタンエリア -->
-    <footer class="app-footer">
-      <!--
-        #gacha-btn：メインのガチャボタン。
-        演出中は disabled 属性を付けて連打を防止する（Step3以降で実装）。
-      -->
-      <button id="gacha-btn" class="gacha-btn" type="button">
-        🎰 ガチャを引く
-      </button>
-    </footer>
-
   </div>
 
-  <!--
-    #screen-overlay：画面全体を覆う暗転用オーバーレイ。
-    ガチャ演出中（Step4）にJSから active クラスを付けて暗転させる。
-    通常時は pointer-events: none で操作を透過させる。
-  -->
-  <div id="screen-overlay" class="screen-overlay"></div>
+</div>
 
-  <!-- アプリ本体（抽選ロジック・演出・ボタン制御） -->
-  <script src="app.js"></script>
+<!--
+  #screen-overlay：画面全体を覆う暗転用オーバーレイ（既存のまま）。
+  app.js が active クラスを付け外しして制御する。
+-->
+<div id="screen-overlay" class="screen-overlay"></div>
+
+<!-- アプリ本体（抽選ロジック・演出・ボタン制御） -->
+<script src="app.js"></script>
 
 </body>
 </html>
