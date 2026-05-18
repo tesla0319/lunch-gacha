@@ -1,6 +1,6 @@
 /* ============================================================
    style.css - ランチガチャ アプリ スタイル
-   Step1: HTML骨組み + CSS基本レイアウト
+   Step7 (MVP完成版)
    ============================================================ */
 
 
@@ -24,8 +24,6 @@
 */
 html {
   overflow-x: hidden;
-  /* iOSでスクロールを滑らかにする */
-  -webkit-overflow-scrolling: touch;
 }
 
 body {
@@ -78,12 +76,14 @@ body {
   margin: 0 auto;
 
   /*
-    safe-area-inset：iPhone の notch（カメラ切り欠き）や
-    ホームバー（画面下部のバー）に UI が隠れないようにする。
-    viewport-fit=cover を設定した上で env() 関数で余白を取る。
+    safe-area-inset：iPhone の notch（カメラ切り欠き）に
+    UI が隠れないようにする。viewport-fit=cover と組み合わせて使う。
+
+    padding-bottom はここには書かない。
+    フッター（.app-footer）が safe-area-inset-bottom を含む余白を持っているため、
+    ここにも書くと二重カウントになり、ボタン下が過大な余白になってしまう。
   */
   padding-top: env(safe-area-inset-top);
-  padding-bottom: env(safe-area-inset-bottom);
   padding-left: env(safe-area-inset-left);
   padding-right: env(safe-area-inset-right);
 }
@@ -198,6 +198,14 @@ body {
 }
 
 /*
+  CONFIG エラー時にプレースホルダーを赤文字にする。
+  インラインスタイルではなく CSS クラスで管理する（JS 側で .is-error を付け外しする）。
+*/
+.result-placeholder.is-error {
+  color: #f87171 !important;
+}
+
+/*
   レアリティバッジ（「SSR」「SR」「R」「N」）。
   表示・非表示は HTML の hidden クラスで制御する。
   hidden クラスが外れると inline-block として表示される。
@@ -230,11 +238,7 @@ body {
   margin-bottom: 8px;
 }
 
-/*
-  昇格演出テキスト。
-  SSR当選 + 昇格演出ありの場合だけ表示する。
-  Step5 で本格的な演出クラスに差し替え予定。
-*/
+/* 昇格演出テキスト（SSR当選 + 昇格演出ありの場合のみ表示）。 */
 .result-promotion {
   margin-top: 12px;
   font-size: 0.95rem;
@@ -358,6 +362,13 @@ body {
   /* タップ時の青いハイライトを除去（iOS対応） */
   -webkit-tap-highlight-color: transparent;
 
+  /*
+    touch-action: manipulation
+    → ダブルタップによるズームを無効化し、タップ認識の遅延（約300ms）を除去する。
+      スマホでボタンの反応を即座にする効果がある。
+  */
+  touch-action: manipulation;
+
   /* 発光感のある影 */
   box-shadow:
     0 4px 20px rgba(255, 160, 0, 0.45),
@@ -375,10 +386,7 @@ body {
     0 1px 4px rgba(0, 0, 0, 0.2);
 }
 
-/*
-  演出中（disabled 状態）のスタイル。
-  Step3以降で JS から disabled 属性を付ける。
-*/
+/* 演出中（disabled 状態）のスタイル。 */
 .gacha-btn:disabled {
   background: linear-gradient(135deg, #3a3a5a, #2a2a4a);
   color: #555;

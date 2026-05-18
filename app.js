@@ -1,6 +1,6 @@
 /**
  * app.js - ランチガチャ アプリ本体
- * Step6: 効果音（mp3未配置でも止まらない・iOS Safari対応）
+ * Step7 (MVP完成版)
  *
  * 【このファイルの構成】
  *  1. CONFIG              … 全設定値を一元管理
@@ -402,6 +402,16 @@ function playAnimation(item, isPromotion) {
 
   animFn(item).catch(err => {
     console.error('[演出エラー]', err);
+
+    /*
+      演出の途中でエラーが起きた場合、画面が暗転したまま
+      ボタンも押せない状態になってしまう。
+      ここで確実にクリーンアップして、アプリを使える状態に戻す。
+    */
+    screenOverlay.classList.remove('active');
+    resultOverlay.className = 'result-overlay hidden';
+    resultArea.className    = 'result-area';
+
     isGachaRunning = false;
     gachaBtn.disabled = false;
   });
@@ -415,6 +425,8 @@ function resetDisplay() {
   resultRarity.className    = 'result-rarity hidden';
   resultName.className      = 'result-name hidden';
   resultPromotion.className = 'result-promotion hidden';
+  // .is-error が残っていると次回エラーでない表示でも赤文字になるのでクリアする
+  resultPlaceholder.classList.remove('is-error');
   resultPlaceholder.classList.add('hidden');
 }
 
@@ -450,7 +462,12 @@ function finishAnimation(item, isPromotion) {
 
 function showError(message) {
   resultPlaceholder.textContent = message;
-  resultPlaceholder.style.color = '#f87171';
+  /*
+    インラインスタイルは後からリセットが難しいので CSS クラスを使う。
+    .is-error クラスが color を #f87171（赤）に上書きする。
+    次回 resetDisplay() が呼ばれると .is-error が外れて元の色に戻る。
+  */
+  resultPlaceholder.classList.add('is-error');
   resultPlaceholder.classList.remove('hidden');
   resultRarity.className    = 'result-rarity hidden';
   resultName.className      = 'result-name hidden';
@@ -462,10 +479,13 @@ function showError(message) {
    17. playGacha() - ガチャ全体のフロー制御
    ============================================================
 
-   【Step6 での変更点】
-   - unlockAudio() を先頭で呼ぶ（iOS Safari の再生制限解除・初回のみ実行）
-   - playSound('click') をボタン押下直後に呼ぶ
-     → ここはユーザー操作の同期コンテキストなので iOS でも確実に鳴る
+   【処理順序の意図】
+   ① unlockAudio() … iOS Safari の再生制限解除（初回のみ・同期処理内）
+   ② playSound('click') … 同期コンテキスト内なので iOS でも確実に鳴る
+   ③ validateConfig() … 抽選前に設定の正常性を保証する
+   ④ 抽選処理 … 演出開始前に全結果を確定させる（仕様書 5.1.3）
+   ⑤ フラグ ON + ボタン無効化 … ここからガチャが「実行中」状態になる
+   ⑥ playAnimation() … 演出終了後に⑤を解除する
 */
 
 function playGacha() {
