@@ -199,35 +199,47 @@ body {
 
 /*
   レアリティバッジ（「SSR」「SR」「R」「N」）。
-  Step3 でJSが動的に表示する。初期は非表示。
+  表示・非表示は HTML の hidden クラスで制御する。
+  hidden クラスが外れると inline-block として表示される。
 */
 .result-rarity {
-  display: none;
+  /*
+    inline-block にする理由：
+    block だと横幅いっぱいに広がってしまう。
+    バッジとしてテキスト幅に収めるために inline-block を使う。
+  */
+  display: inline-block;
   font-size: 1.1rem;
   font-weight: bold;
   letter-spacing: 0.25em;
   margin-bottom: 16px;
-
-  /* レアリティバッジ風の枠 */
-  display: inline-block;
   padding: 4px 16px;
+
+  /* currentColor = 親要素の color 値を使う（レアリティ色クラスで色を変える） */
   border: 2px solid currentColor;
   border-radius: 4px;
-
-  /* 初期は非表示 */
-  visibility: hidden;
 }
 
-/*
-  当選アイテム名（「焼肉」「ラーメン」など）。
-  Step3 でJSが動的に表示する。初期は非表示。
-*/
+/* 当選アイテム名（「焼肉」「ラーメン」など）。 */
 .result-name {
-  display: none;
+  /* 表示・非表示は HTML の hidden クラスで制御する */
   font-size: 2.6rem;
   font-weight: bold;
   letter-spacing: 0.05em;
   line-height: 1.2;
+  margin-bottom: 8px;
+}
+
+/*
+  昇格演出テキスト。
+  SSR当選 + 昇格演出ありの場合だけ表示する。
+  Step5 で本格的な演出クラスに差し替え予定。
+*/
+.result-promotion {
+  margin-top: 12px;
+  font-size: 0.95rem;
+  font-weight: bold;
+  letter-spacing: 0.08em;
 }
 
 
@@ -361,22 +373,62 @@ body {
   /* Step4で実装 */
 }
 
-/* レアリティ別のカラーリング */
-/* Step4 で色・グロー・アニメーションを追加する */
-.rarity-ssr {
-  /* SSR：虹色・金色 */
+/* ===== レアリティ別カラーリング ===== */
+
+/*
+  color プロパティを設定すると：
+  - バッジの文字色が変わる
+  - バッジの枠が border: 2px solid currentColor で自動的に同色になる
+  - アイテム名テキストも同色になる
+
+  Step4 でグロー（光）エフェクトやアニメーションを追加予定。
+*/
+
+.rarity-ssr { color: #ffd700; } /* 金色 */
+.rarity-sr  { color: #c084fc; } /* 紫   */
+.rarity-r   { color: #60a5fa; } /* 青   */
+.rarity-n   { color: #9ca3af; } /* 灰   */
+
+/*
+  カード（.result-area）の枠線もレアリティ色に変える。
+  .result-area に .rarity-* を重ねることで枠線・影を上書きする。
+*/
+.result-area.rarity-ssr {
+  border-color: #ffd700;
+  /* 金色の光彩（Step4でより強い演出を追加） */
+  box-shadow:
+    0 0 20px rgba(255, 215, 0, 0.25),
+    0 8px 32px rgba(0, 0, 0, 0.6),
+    inset 0 1px 0 rgba(255, 255, 255, 0.05);
 }
 
-.rarity-sr {
-  /* SR：紫 */
+.result-area.rarity-sr {
+  border-color: #c084fc;
+  box-shadow:
+    0 0 20px rgba(192, 132, 252, 0.2),
+    0 8px 32px rgba(0, 0, 0, 0.6),
+    inset 0 1px 0 rgba(255, 255, 255, 0.05);
 }
 
-.rarity-r {
-  /* R：青 */
+.result-area.rarity-r {
+  border-color: #60a5fa;
+  box-shadow:
+    0 0 16px rgba(96, 165, 250, 0.2),
+    0 8px 32px rgba(0, 0, 0, 0.6),
+    inset 0 1px 0 rgba(255, 255, 255, 0.05);
 }
 
-.rarity-n {
-  /* N：灰色 */
+.result-area.rarity-n {
+  border-color: #4b5563;
+  /* N はグロー無し */
+  box-shadow:
+    0 8px 32px rgba(0, 0, 0, 0.6),
+    inset 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+
+/* 昇格演出テキストは SSR 金色で強調 */
+.result-promotion.rarity-ssr {
+  color: #ffd700;
 }
 
 

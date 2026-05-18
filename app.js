@@ -1,27 +1,31 @@
 /**
  * app.js - ランチガチャ アプリ本体
- * Step2: CONFIG・抽選ロジック・バリデーション
+ * Step3: ボタン押下 → 抽選 → DOM 表示の最小フロー
  *
  * 【このファイルの構成】
- *  1. CONFIG    … アプリの全設定値を一元管理するオブジェクト
- *  2. validateConfig()      … CONFIGの妥当性を検証する
- *  3. pickRarity()          … 重み付き抽選でレアリティを決める
- *  4. pickItemByRarity()    … レアリティ内からアイテムをランダム選択
- *  5. shouldPromote()       … 昇格演出を発生させるか判定
- *  6. 動作確認コード         … ページ読み込み時にコンソールで確認（Step3で削除）
+ *  1. CONFIG             … 全設定値を一元管理
+ *  2. DOM 要素の参照      … 操作する要素をまとめて取得
+ *  3. 状態変数            … アプリの状態を管理するフラグ
+ *  4. validateConfig()   … CONFIG の妥当性チェック
+ *  5. pickRarity()       … 重み付き抽選でレアリティを決定
+ *  6. pickItemByRarity() … レアリティ内からアイテムをランダム選択
+ *  7. shouldPromote()    … 昇格演出を発生させるか判定
+ *  8. renderResult()     … 抽選結果を画面（DOM）に反映
+ *  9. showError()        … エラーメッセージを画面に表示
+ * 10. playGacha()        … ガチャ全体のフロー制御（メイン関数）
+ * 11. イベントリスナー    … ボタン押下の検知
  */
 
-'use strict'; // バグを早期発見するための厳格モード
+'use strict'; // 厳格モード：バグを早期発見しやすくなる
 
 /* ============================================================
    1. CONFIG - アプリ全体の設定値
-   ※ この中の数値を変えるだけで確率・演出時間などが調整できる
+   数値を変えるだけで確率・演出時間を調整できる
    ============================================================ */
 
 const CONFIG = {
 
-  // ---- 抽選確率（レアリティの重み） ----
-  // 合計が必ず 100 になるようにすること（validateConfig でチェックする）
+  // ---- 抽選確率（合計が必ず 100 になること） ----
   rarityWeights: {
     SSR: 3,   // 3%
     SR:  12,  // 12%
@@ -29,17 +33,14 @@ const CONFIG = {
     N:   50,  // 50%
   },
 
-  // ---- 昇格演出の発生率 ----
-  // SSR 当選時のうち、この % の確率で「昇格演出」が発生する
+  // SSR 当選時のうち、この % で昇格演出が発生する
   promotionRate: 30, // 30%
 
-  // ---- 演出時間（ミリ秒） ----
-  // Step4（ガチャ演出）で使用する。1000ms = 1秒。
-  normalAnimMs:    2500, // 通常演出の長さ
-  promotionAnimMs: 4500, // 昇格演出の長さ
+  // 演出時間（ミリ秒）。Step4 のアニメーション実装で使用する。
+  normalAnimMs:    2500,
+  promotionAnimMs: 4500,
 
-  // ---- ガチャ候補アイテム ----
-  // name: 表示名、rarity: 上の rarityWeights のキーと一致させること
+  // ガチャ候補アイテム
   items: [
     { name: '焼肉',     rarity: 'SSR' },
     { name: '寿司',     rarity: 'SR'  },
@@ -50,98 +51,82 @@ const CONFIG = {
 };
 
 /* ============================================================
-   2. validateConfig() - CONFIG の妥当性チェック
-   ============================================================
+   2. DOM 要素の参照
+   getElementById で要素を取得しておく。
+   毎回 getElementById を呼ぶより、最初に変数に入れておく方が効率的。
+   ============================================================ */
 
-   なぜ必要か：
-   CONFIG の数値を誰かが誤って書き換えたとき（例：SSR: -1 や合計=99）、
-   抽選ロジックが壊れる。それを事前に検出してエラーを出すための関数。
+const gachaBtn          = document.getElementById('gacha-btn');
+const resultArea        = document.getElementById('result-area');
+const resultRarity      = document.getElementById('result-rarity');
+const resultName        = document.getElementById('result-name');
+const resultPromotion   = document.getElementById('result-promotion');
+const resultPlaceholder = document.getElementById('result-placeholder');
 
-   戻り値：
-   - true  … CONFIG は正常、抽選を続行してよい
-   - false … CONFIG に問題あり、抽選を中止すること
+/* ============================================================
+   3. 状態変数
+   ============================================================ */
+
+/*
+  isGachaRunning：ガチャ演出中かどうかを示すフラグ。
+  true の間はボタンを押しても何もしない（多重実行防止）。
+  Step4 でアニメーション中に true になり、終了後に false に戻る。
 */
+let isGachaRunning = false;
+
+/* ============================================================
+   4. validateConfig() - CONFIG の妥当性チェック
+   戻り値：正常=true / 異常=false
+   ============================================================ */
 
 function validateConfig() {
   const weights = CONFIG.rarityWeights;
 
-  // ---- (1) 各値の妥当性チェック ----
-  // 一つでも不正な値があれば即 false を返す（早期 return）
+  // (1) 各値の妥当性チェック（型・NaN・Infinity・負数）
   for (const [rarity, weight] of Object.entries(weights)) {
 
-    // typeof チェック：文字列など数値以外が入っていないか
     if (typeof weight !== 'number') {
-      console.error(
-        `[CONFIG ERROR] rarityWeights に数値以外の値があります: ${rarity}="${weight}"`
-      );
+      console.error(`[CONFIG ERROR] rarityWeights に数値以外の値があります: ${rarity}="${weight}"`);
       return false;
     }
-
-    // NaN チェック：Number.isNaN() は NaN のときだけ true になる
-    // （typeof NaN === 'number' なので上のチェックでは通ってしまう）
     if (Number.isNaN(weight)) {
-      console.error(
-        `[CONFIG ERROR] rarityWeights に NaN があります: ${rarity}=NaN`
-      );
+      console.error(`[CONFIG ERROR] rarityWeights に NaN があります: ${rarity}=NaN`);
       return false;
     }
-
-    // Infinity チェック：Number.isFinite() は有限数のとき true になる
     if (!Number.isFinite(weight)) {
-      console.error(
-        `[CONFIG ERROR] rarityWeights に Infinity があります: ${rarity}=${weight}`
-      );
+      console.error(`[CONFIG ERROR] rarityWeights に Infinity があります: ${rarity}=${weight}`);
       return false;
     }
-
-    // 負数チェック：0 は「そのレアリティを排除」として許容する
     if (weight < 0) {
-      console.error(
-        `[CONFIG ERROR] rarityWeights に負の値があります: ${rarity}=${weight}`
-      );
+      console.error(`[CONFIG ERROR] rarityWeights に負の値があります: ${rarity}=${weight}`);
       return false;
     }
   }
 
-  // ---- (2) 合計値チェック ----
-  // reduce で全ての重みを足し合わせる
+  // (2) 合計値チェック
   const total = Object.values(weights).reduce((sum, w) => sum + w, 0);
-
   if (total !== 100) {
-    console.error(
-      `[CONFIG ERROR] rarityWeights の合計が 100 ではありません: 実際の合計=${total}`
-    );
+    console.error(`[CONFIG ERROR] rarityWeights の合計が 100 ではありません: 実際の合計=${total}`);
     return false;
   }
 
-  // 全チェック通過
   return true;
 }
 
 /* ============================================================
-   3. pickRarity() - 重み付き抽選でレアリティを決める
-   ============================================================
-
-   アルゴリズム（累積確率法）：
-   ① 0以上100未満のランダム値を生成（例: 4.7）
-   ② 重みを先頭から順番に足していく（累積値）
-   ③ ランダム値が累積値を下回った時点のレアリティを返す
-
-   例：SSR=3, SR=12, R=35, N=50 のとき
-     rand=4.7 →  SSR:3 (累積3, 4.7≥3)
-              →  SR:12 (累積15, 4.7<15) → SR を返す ✓
-
+   5. pickRarity() - 重み付き抽選でレアリティを決定
    戻り値：'SSR' | 'SR' | 'R' | 'N'
-*/
+   ============================================================ */
 
 function pickRarity() {
-  // 0以上100未満のランダム値
+  /*
+    累積確率法：
+    ランダム値が最初に累積値を下回ったレアリティを返す。
+    例）rand=4.7：SSR累積3（通過）→ SR累積15（4.7<15）→ SR を返す
+  */
   const rand = Math.random() * 100;
+  let cumulative = 0;
 
-  let cumulative = 0; // 累積値（最初は0）
-
-  // Object.entries はオブジェクトのキーを挿入順で返す
-  // → CONFIG で SSR→SR→R→N の順に書いてあれば、その順で判定される
   for (const [rarity, weight] of Object.entries(CONFIG.rarityWeights)) {
     cumulative += weight;
     if (rand < cumulative) {
@@ -149,105 +134,154 @@ function pickRarity() {
     }
   }
 
-  /*
-    浮動小数点の誤差（例：合計が 99.9999... になるケース）で
-    ループを抜けてしまう場合のフォールバック。
-    validateConfig で合計=100 を保証しているので通常はここに来ない。
-  */
+  // 浮動小数点誤差のフォールバック（通常はここに来ない）
   const rarities = Object.keys(CONFIG.rarityWeights);
   return rarities[rarities.length - 1];
 }
 
 /* ============================================================
-   4. pickItemByRarity(rarity) - 同レアリティ内からアイテムをランダム選択
-   ============================================================
-
-   なぜ別関数か：
-   レアリティ決定（pickRarity）とアイテム決定を分離することで、
-   「同レアリティ内は均等抽選」というルールをここだけに閉じ込められる。
-
-   引数：rarity - 'SSR' | 'SR' | 'R' | 'N'
-   戻り値：{ name: string, rarity: string }
-*/
+   6. pickItemByRarity(rarity) - レアリティ内からアイテムを均等抽選
+   戻り値：{ name: string, rarity: string } または null
+   ============================================================ */
 
 function pickItemByRarity(rarity) {
-  // 指定されたレアリティのアイテムだけを絞り込む
   const candidates = CONFIG.items.filter(item => item.rarity === rarity);
 
-  /*
-    候補が0件になるのは CONFIG の設定ミス（重みはあるのにアイテムが無い）。
-    起きてほしくないが、万が一のためにフォールバックを用意する。
-  */
   if (candidates.length === 0) {
     console.error(`[CONFIG ERROR] rarity="${rarity}" に対応するアイテムがありません`);
     return null;
   }
 
-  // 均等抽選：Math.floor で 0〜(候補数-1) の整数インデックスを得る
+  // 均等抽選：0〜(候補数-1) の整数インデックスをランダムに選ぶ
   const index = Math.floor(Math.random() * candidates.length);
   return candidates[index];
 }
 
 /* ============================================================
-   5. shouldPromote(rarity) - 昇格演出を発生させるか判定
-   ============================================================
-
-   昇格演出（Step5で実装）：
-   SSR 当選時にさらに確率で「最初は R っぽく見せてから SSR に昇格する」演出。
-
-   引数：rarity - 抽選で確定したレアリティ
-   戻り値：true（昇格演出あり）/ false（昇格演出なし）
-*/
+   7. shouldPromote(rarity) - 昇格演出を発生させるか判定
+   戻り値：true（昇格演出あり）/ false（なし）
+   ============================================================ */
 
 function shouldPromote(rarity) {
-  // SSR 以外では昇格演出は発生しない
-  if (rarity !== 'SSR') {
-    return false;
-  }
-
-  // SSR 当選時のみ、CONFIG.promotionRate % の確率で昇格演出を発生させる
+  if (rarity !== 'SSR') return false;
   return Math.random() * 100 < CONFIG.promotionRate;
 }
 
 /* ============================================================
-   6. 動作確認コード（Step2のみ）
+   8. renderResult(item, isPromotion) - 結果を画面（DOM）に反映
    ============================================================
 
-   ブラウザの開発者ツール（コンソール）で抽選結果を確認するためのコード。
-   Step3 でボタン連携が完成したら、この IIFE（即時実行関数）ブロックを削除する。
+   やること：
+   - プレースホルダーを隠す
+   - レアリティバッジ・アイテム名を表示し、レアリティ色を付ける
+   - 昇格演出ありの場合はテキストを表示する
+   - カードの枠線色をレアリティに合わせる
 */
 
-(function step2Test() {
-  console.log('========================================');
-  console.log('  ランチガチャ Step2 動作確認');
-  console.log('========================================');
+function renderResult(item, isPromotion) {
+  const rarityClass = `rarity-${item.rarity.toLowerCase()}`; // 例：'rarity-ssr'
 
-  // まず CONFIG を検証する
-  const isValid = validateConfig();
-  if (!isValid) {
-    console.warn('⛔ CONFIG が不正なため抽選テストを中止します');
+  // プレースホルダーを非表示にする
+  resultPlaceholder.classList.add('hidden');
+
+  // レアリティバッジを表示
+  // className を直接書き換えることで、前回のレアリティクラスもリセットできる
+  resultRarity.textContent = item.rarity;
+  resultRarity.className   = `result-rarity ${rarityClass}`; // hidden は外れる
+
+  // アイテム名を表示（レアリティと同じ色にする）
+  resultName.textContent = item.name;
+  resultName.className   = `result-name ${rarityClass}`;     // hidden は外れる
+
+  // 昇格演出テキストの表示・非表示
+  if (isPromotion) {
+    resultPromotion.textContent = '🎊 昇格演出あり';
+    resultPromotion.className   = `result-promotion rarity-ssr`; // hidden は外れる
+  } else {
+    resultPromotion.className = 'result-promotion hidden';
+  }
+
+  // カードの枠線色をレアリティに合わせる
+  // result-area.rarity-ssr などの CSS が border-color を上書きする
+  resultArea.className = `result-area ${rarityClass}`;
+}
+
+/* ============================================================
+   9. showError(message) - 画面にエラーメッセージを表示
+   CONFIG が不正なときなど、抽選を実行できない場合に呼ぶ
+   ============================================================ */
+
+function showError(message) {
+  // プレースホルダーをエラーメッセージとして再利用する
+  resultPlaceholder.textContent   = message;
+  resultPlaceholder.style.color   = '#f87171'; // 赤色でエラーと分かるように
+  resultPlaceholder.classList.remove('hidden');
+
+  // 結果要素は隠しておく
+  resultRarity.className    = 'result-rarity hidden';
+  resultName.className      = 'result-name hidden';
+  resultPromotion.className = 'result-promotion hidden';
+}
+
+/* ============================================================
+   10. playGacha() - ガチャ全体のフロー制御（メイン関数）
+   ============================================================
+
+   【重要】抽選結果は演出開始前に確定させること（仕様書 5.1.3 より）
+   → pickRarity・pickItemByRarity・shouldPromote を先に全部呼ぶ。
+   → 演出と結果生成を混ぜると「演出途中で結果が変わる」バグが起きやすい。
+*/
+
+function playGacha() {
+
+  // ---- 多重実行防止 ----
+  // ガチャ演出中（isGachaRunning=true）は何もしない
+  if (isGachaRunning) return;
+
+  // ---- CONFIG バリデーション ----
+  if (!validateConfig()) {
+    showError('設定エラー：管理者にお問い合わせください');
     return;
   }
-  console.log('✅ CONFIG バリデーション: OK（重み合計=100）');
-  console.log('--- 抽選テスト（10回）---');
 
-  // 10回抽選して結果を出力
-  for (let i = 1; i <= 10; i++) {
-    const rarity    = pickRarity();
-    const item      = pickItemByRarity(rarity);
-    const promotion = shouldPromote(rarity);
+  // ---- ① 抽選結果を先に確定 ----
+  // この3行で「今回のガチャ結果」がすべて決まる。
+  // 以降の演出・表示はこの結果を使うだけで、抽選は行わない。
+  const rarity      = pickRarity();
+  const item        = pickItemByRarity(rarity);
+  const isPromotion = shouldPromote(rarity);
 
-    // アイテムが取得できなかった場合（CONFIG設定ミス）はスキップ
-    if (!item) continue;
-
-    console.log(
-      `[${String(i).padStart(2, '0')}回目]`,
-      `rarity: ${rarity.padEnd(3)}`,
-      `| item: ${item.name}`,
-      promotion ? '| 🎊 昇格演出あり' : ''
-    );
+  // CONFIG 設定ミスで item が取得できなかった場合は中止
+  if (!item) {
+    showError('抽選エラーが発生しました');
+    return;
   }
 
-  console.log('--- テスト完了 ---');
-  console.log('※ Step3 完了後、このテストコードは削除します');
-})();
+  // 開発者確認用ログ（Step4 以降も残しておくと便利）
+  console.log('[ガチャ結果確定]', {
+    rarity,
+    item: item.name,
+    promotion: isPromotion ? '昇格演出あり🎊' : 'なし',
+  });
+
+  // ---- ② 実行中フラグ ON・ボタン無効化 ----
+  isGachaRunning = true;
+  gachaBtn.disabled = true;
+
+  // ---- ③ 結果を画面に反映 ----
+  // Step3 では演出なしで即時表示する。
+  // Step4 でここに「アニメーション → 一定時間後に renderResult」の処理を追加する。
+  renderResult(item, isPromotion);
+
+  // ---- ④ 実行中フラグ OFF・ボタン有効化 ----
+  // Step3 では即時。Step4 でアニメーション終了後に呼ぶ形に変える。
+  isGachaRunning = false;
+  gachaBtn.disabled = false;
+}
+
+/* ============================================================
+   11. イベントリスナー - ボタン押下を検知して playGacha を呼ぶ
+   ============================================================ */
+
+// 'click' イベントはマウスクリックにもスマホのタップにも反応する
+gachaBtn.addEventListener('click', playGacha);

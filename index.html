@@ -56,19 +56,23 @@
 
           <!--
             レアリティバッジ（例：「SSR」「SR」「R」「N」）。
-            Step3でJSが動的にテキストとクラスを設定する。
-            初期は display: none で非表示。
+            初期は hidden で非表示。Step3 の renderResult() が classList を書き換えて表示する。
           -->
-          <div id="result-rarity" class="result-rarity"></div>
+          <div id="result-rarity" class="result-rarity hidden"></div>
 
           <!--
             当選アイテム名（例：「焼肉」「ラーメン」）。
-            Step3でJSが動的にテキストを設定する。
-            初期は display: none で非表示。
+            初期は hidden で非表示。Step3 の renderResult() が表示する。
           -->
-          <div id="result-name" class="result-name"></div>
+          <div id="result-name" class="result-name hidden"></div>
 
-          <!-- 抽選前のガイドテキスト。結果が出たら非表示にする。 -->
+          <!--
+            昇格演出テキスト。
+            SSR 当選 + 昇格演出あり の場合だけ表示する（Step5 で本格演出に差し替え）。
+          -->
+          <div id="result-promotion" class="result-promotion hidden"></div>
+
+          <!-- 抽選前のガイドテキスト。renderResult() 呼び出し時に非表示にする。 -->
           <p id="result-placeholder" class="result-placeholder">
             ボタンを押して<br>ガチャを引こう！
           </p>
