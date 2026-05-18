@@ -547,6 +547,12 @@ body {
   border-color: #ffd700;
   /* glow-ssr キーフレームで gold グローが脈打つ */
   animation: glow-ssr 1.8s ease-in-out infinite;
+  /* SSR専用：流星背景 + 暗めオーバーレイ（テキスト可読性確保） */
+  background-image:
+    linear-gradient(rgba(0, 0, 0, 0.55), rgba(0, 0, 0, 0.55)),
+    url('images/meteor-background.png');
+  background-size: cover;
+  background-position: center;
 }
 
 .result-area.rarity-sr {
