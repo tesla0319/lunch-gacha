@@ -257,6 +257,12 @@ body {
   justify-content: center;
   background: rgba(0, 0, 0, 0.88);
   z-index: 10;
+  /*
+    background の変化をなめらかに。
+    Phase2 でレアリティ色へ染まる際に使う。
+    ただし animation が付いているときは animation が優先される。
+  */
+  transition: background 0.35s ease;
 }
 
 .overlay-text {
@@ -285,6 +291,30 @@ body {
 .result-overlay.rarity-sr  { background: rgba(28, 0, 42, 0.93); }
 .result-overlay.rarity-r   { background: rgba(0, 14, 45, 0.93); }
 .result-overlay.rarity-n   { background: rgba(8, 8, 18, 0.93);  }
+
+/*
+  昇格演出 Step5：フラッシュ
+  オーバーレイが金色に一瞬輝く演出。
+  animation は transition より優先されるので、
+  transition の 0.35s は無視されて animation の時間で動く。
+*/
+.result-overlay.flash {
+  /* animation: both で開始前も from の状態を保持 */
+  animation: card-flash 0.45s ease-out both;
+  /* フラッシュ中は pointer-events を切る（誤タップ防止） */
+  pointer-events: none;
+}
+
+/*
+  昇格演出 Step5：レインボーテキスト
+  「✨ 昇格！！」文字が虹色に光るアニメーション。
+*/
+.overlay-text.is-rainbow {
+  font-size: 1.9rem;
+  animation: rainbow-shift 1.4s linear infinite;
+  /* text-shadow も currentColor を使って光彩を付ける */
+  text-shadow: 0 0 24px currentColor, 0 0 40px currentColor;
+}
 
 
 /* ===== フッター（ガチャボタン） ===== */
@@ -450,6 +480,31 @@ body {
       0 0 34px rgba(96, 165, 250, 0.75),
       0 8px 32px rgba(0, 0, 0, 0.6);
   }
+}
+
+/*
+  昇格フラッシュ：オーバーレイが金色に輝いて消えていく。
+  0%→40% で一気に明るくなり、40%→100% でゆっくり暗くなる。
+  最終値（100%）は通常の暗いオーバーレイ色にしておくと、
+  次の「昇格！！」テキスト表示にスムーズにつながる。
+*/
+@keyframes card-flash {
+  0%   { background: rgba(255, 230, 60, 0);    }
+  40%  { background: rgba(255, 230, 60, 0.97); }
+  100% { background: rgba(10,   8,  0, 0.92);  }
+}
+
+/*
+  レインボーテキスト：色相が一周するカラーアニメーション。
+  「昇格！！」の文字が虹色に輝き続ける演出。
+*/
+@keyframes rainbow-shift {
+  0%   { color: #ffd700; } /* 金 */
+  20%  { color: #ff6b6b; } /* 赤 */
+  40%  { color: #ff9f43; } /* オレンジ */
+  60%  { color: #a29bfe; } /* 紫 */
+  80%  { color: #74b9ff; } /* 水色 */
+  100% { color: #ffd700; } /* 金（ループ） */
 }
 
 
